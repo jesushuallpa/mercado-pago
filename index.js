@@ -11,9 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 admin.initializeApp({
-  credential: admin.credential.cert(
-    path.resolve(__dirname, 'firebase-key.json') // 🔐 ← clave privada de Firebase
-  ),
+  credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_KEY_JSON)),
 });
 
 const app = express();
