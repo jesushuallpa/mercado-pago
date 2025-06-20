@@ -3,15 +3,15 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import admin from 'firebase-admin';
 import path from 'path';
+import mercadopago from 'mercadopago'; // ✅ IMPORTANTE
 import { fileURLToPath } from 'url';
 
 dotenv.config();
 
-// Obtener __dirname compatible con ESModules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Inicializar Firebase Admin con la clave desde una variable de entorno
+// Inicializar Firebase
 admin.initializeApp({
   credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_KEY_JSON)),
 });
@@ -20,38 +20,34 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const db = admin.firestore();
 
-// ✅ Ruta de prueba para ver que el servidor funciona
+// ✅ Necesario para parsear JSON en solicitudes POST
+app.use(express.json());
+
+// Ruta de prueba
 app.get('/', (req, res) => {
   res.send('🚀 Servidor de Mercado Pago funcionando correctamente.');
 });
 
-// 📌 Ruta que maneja la redirección de Mercado Pago con el "code"
+// Ruta de callback OAuth
 app.get('/oauth_callback', async (req, res) => {
   const code = req.query.code;
-  const state = req.query.state || null; // uid del usuario (recomendado enviarlo desde Flutter)
+  const state = req.query.state || null;
 
-  if (!code) {
-    return res.status(400).send('Falta el código de autorización.');
-  }
+  if (!code) return res.status(400).send('Falta el código de autorización.');
 
   try {
-    // Solicita token a Mercado Pago
     const tokenResponse = await axios.post('https://api.mercadopago.com/oauth/token', null, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       params: {
         grant_type: 'authorization_code',
         client_id: process.env.CLIENT_ID,
         client_secret: process.env.CLIENT_SECRET,
-        code: code,
+        code,
         redirect_uri: process.env.REDIRECT_URI,
       },
     });
 
     const { access_token, user_id, public_key } = tokenResponse.data;
-
-    // Guarda en Firestore bajo el UID del usuario (usando "state")
     const uid = state;
 
     await db.collection('usuario').doc(uid).set({
@@ -59,10 +55,9 @@ app.get('/oauth_callback', async (req, res) => {
       mp_access_token: access_token,
       mp_user_id: user_id,
       mp_public_key: public_key,
-      metodoPagoRegistrado: true, // ✅ esta línea es necesaria
+      metodoPagoRegistrado: true,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
-
 
     res.send('✅ Tu cuenta de Mercado Pago ha sido conectada exitosamente.');
   } catch (error) {
@@ -71,7 +66,51 @@ app.get('/oauth_callback', async (req, res) => {
   }
 });
 
-// 🔊 Inicia el servidor
+// Ruta para crear preferencia de pago
+app.post('/create_preference', async (req, res) => {
+  try {
+    const { vendedorId, items } = req.body;
+
+    if (!vendedorId || !Array.isArray(items)) {
+      return res.status(400).json({ error: 'Datos incompletos' });
+    }
+
+    const vendedorDoc = await db.collection('usuario').doc(vendedorId).get();
+    const data = vendedorDoc.data();
+
+    if (!data || !data.mp_access_token) {
+      return res.status(400).json({ error: 'El vendedor no tiene cuenta de Mercado Pago conectada' });
+    }
+
+    const accessToken = data.mp_access_token;
+
+    mercadopago.configure({ access_token: accessToken });
+
+    const preference = {
+      items: items.map(item => ({
+        title: item.title,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        currency_id: 'PEN',
+      })),
+      back_urls: {
+        success: 'https://tusitio.com/success',
+        failure: 'https://tusitio.com/failure',
+        pending: 'https://tusitio.com/pending',
+      },
+      auto_return: 'approved',
+    };
+
+    const result = await mercadopago.preferences.create(preference);
+    console.log('✅ Preferencia creada:', result.body.id);
+    res.json({ init_point: result.body.init_point });
+
+  } catch (error) {
+    console.error('❌ Error al crear preferencia:', error);
+    res.status(500).json({ error: 'Error al crear preferencia' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
