@@ -97,7 +97,9 @@ app.post('/create_preference', async (req, res) => {
     console.log('🔐 Token de acceso:', accessToken);
 
     // ✅ Nueva forma de configuración con SDK v2+
-    mercadopago.configurations.setAccessToken(accessToken);
+    mercadopago.configure({
+      access_token: accessToken
+    });
 
     const preference = {
       items: items.map(item => ({
