@@ -3,7 +3,8 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import admin from 'firebase-admin';
 import path from 'path';
-import mercadopago from 'mercadopago'; // ✅ IMPORTANTE
+import pkg from 'mercadopago';
+const mercadopago = pkg.default;
 import { fileURLToPath } from 'url';
 
 dotenv.config();
