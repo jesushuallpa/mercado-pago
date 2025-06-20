@@ -71,18 +71,30 @@ app.post('/create_preference', async (req, res) => {
   try {
     const { vendedorId, items } = req.body;
 
+    console.log('📦 Datos recibidos en /create_preference');
+    console.log('🧾 vendedorId:', vendedorId);
+    console.log('📋 items:', items);
+
     if (!vendedorId || !Array.isArray(items)) {
       return res.status(400).json({ error: 'Datos incompletos' });
     }
 
     const vendedorDoc = await db.collection('usuario').doc(vendedorId).get();
+    console.log('📄 vendedorDoc.exists:', vendedorDoc.exists);
+
+    if (!vendedorDoc.exists) {
+      return res.status(404).json({ error: 'Vendedor no encontrado' });
+    }
+
     const data = vendedorDoc.data();
+    console.log('🧑‍💼 Datos del vendedor:', data);
 
     if (!data || !data.mp_access_token) {
       return res.status(400).json({ error: 'El vendedor no tiene cuenta de Mercado Pago conectada' });
     }
 
     const accessToken = data.mp_access_token;
+    console.log('🔐 Token de acceso:', accessToken);
 
     mercadopago.configure({ access_token: accessToken });
 
@@ -103,11 +115,13 @@ app.post('/create_preference', async (req, res) => {
 
     const result = await mercadopago.preferences.create(preference);
     console.log('✅ Preferencia creada:', result.body.id);
+
     res.json({ init_point: result.body.init_point });
 
   } catch (error) {
-    console.error('❌ Error al crear preferencia:', error);
-    res.status(500).json({ error: 'Error al crear preferencia' });
+  const msg = error.response?.data || error.message || error;
+  console.error('❌ Error al crear preferencia:', msg);
+  res.status(500).json({ error: msg });
   }
 });
 
