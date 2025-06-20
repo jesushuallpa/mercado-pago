@@ -3,7 +3,7 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import admin from 'firebase-admin';
 import path from 'path';
-import * as mercadopago from 'mercadopago'; // ✅ Correcto
+import mercadopago from 'mercadopago'; // ✅ Correcta forma de importar
 import { fileURLToPath } from 'url';
 
 dotenv.config();
@@ -20,7 +20,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const db = admin.firestore();
 
-// ✅ Necesario para parsear JSON en solicitudes POST
+// Middleware para parsear JSON
 app.use(express.json());
 
 // Ruta de prueba
@@ -96,7 +96,8 @@ app.post('/create_preference', async (req, res) => {
     const accessToken = data.mp_access_token;
     console.log('🔐 Token de acceso:', accessToken);
 
-    mercadopago.configure({ access_token: accessToken });
+    // ✅ Nueva forma de configuración con SDK v2+
+    mercadopago.configurations.setAccessToken(accessToken);
 
     const preference = {
       items: items.map(item => ({
@@ -119,9 +120,9 @@ app.post('/create_preference', async (req, res) => {
     res.json({ init_point: result.body.init_point });
 
   } catch (error) {
-  const msg = error.response?.data || error.message || error;
-  console.error('❌ Error al crear preferencia:', msg);
-  res.status(500).json({ error: msg });
+    const msg = error.response?.data || error.message || error;
+    console.error('❌ Error al crear preferencia:', msg);
+    res.status(500).json({ error: msg });
   }
 });
 
